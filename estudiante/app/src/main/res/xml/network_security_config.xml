@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- HTTP sin cifrar se permite solo porque el servidor del docente vive en la red local
+         (http://192.168.x.x:8765). La app restringe la navegación a ESE servidor exacto en
+         modo red local, y a dominios HTTPS en modo examen web; además el WebView nunca mezcla
+         contenido HTTP dentro de páginas HTTPS.
+         Solo se confía en certificados del sistema: evita proxies o certificados instalados
+         por el usuario para espiar o alterar el examen. -->
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

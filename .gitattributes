@@ -1,0 +1,7 @@
+* text=auto
+estudiante/gradlew text eol=lf
+*.bat text eol=crlf
+*.jar binary
+*.apk binary
+*.exe binary
+*.xlsx binary

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Examen Seguro</string>
+
+    <color name="brand">#1E3A8A</color>
+    <color name="brand_dark">#0F1B3D</color>
+    <color name="bar">#111827</color>
+    <color name="warn">#B45309</color>
+    <color name="shield">#F2101828</color>
+
+    <style name="Theme.ExamenSeguro" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/brand</item>
+        <item name="colorSecondary">@color/brand</item>
+    </style>
+</resources>

@@ -1,0 +1,25 @@
+¿Cuál es el planeta más grande del sistema solar?
+A. Marte
+B. Júpiter
+C. Saturno
+D. Neptuno
+ANSWER: B
+
+Selecciona los números primos
+A. 2
+B. 9
+C. 11
+D. 15
+ANSWER: A,C
+PUNTOS: 2
+
+La Luna tiene luz propia.
+ANSWER: F
+
+¿En qué año llegó el ser humano a la Luna?
+RESPUESTA: 1969
+TIPO: abierta
+
+Explica brevemente qué es la fotosíntesis.
+TIPO: abierta
+PUNTOS: 3

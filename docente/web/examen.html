@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Examen</title>
+<style>
+  :root {
+    --bg: #f3f5fa; --card: #fff; --ink: #111827; --muted: #6b7280; --line: #e5e7eb;
+    --brand: #1e3a8a; --brand-soft: #e0e7ff; --ok: #15803d; --ok-soft: #dcfce7;
+    --warn: #b45309; --warn-soft: #fef3c7; --bad: #b91c1c;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  header { position: sticky; top: 0; z-index: 5; background: var(--brand); color: #fff; padding: 10px 16px 0; }
+  .fila { display: flex; align-items: center; gap: 12px; }
+  .titulo { flex: 1; min-width: 0; }
+  .titulo b { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .titulo small { opacity: .8; }
+  .reloj { font-variant-numeric: tabular-nums; font-weight: 700; font-size: 18px; background: rgba(255,255,255,.15);
+    padding: 4px 10px; border-radius: 8px; }
+  .reloj.poco { background: #dc2626; }
+  .barra { height: 4px; background: rgba(255,255,255,.25); margin: 10px -16px 0; }
+  .barra i { display: block; height: 100%; width: 0; background: #fbbf24; transition: width .3s; }
+  main { max-width: 720px; margin: 0 auto; padding: 16px; }
+  .tarjeta { background: var(--card); border-radius: 14px; padding: 18px; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+  .meta { display: flex; justify-content: space-between; color: var(--muted); font-size: 14px; margin-bottom: 8px; }
+  .enunciado { font-size: 18px; font-weight: 600; white-space: pre-wrap; margin: 0 0 16px; }
+  label.op { display: flex; gap: 12px; align-items: flex-start; padding: 14px; border: 2px solid var(--line);
+    border-radius: 12px; margin-bottom: 10px; cursor: pointer; }
+  label.op input { width: 22px; height: 22px; margin: 1px 0 0; accent-color: var(--brand); flex: none; }
+  label.op.sel { border-color: var(--brand); background: var(--brand-soft); }
+  textarea { width: 100%; min-height: 140px; font: inherit; padding: 12px; border: 2px solid var(--line);
+    border-radius: 12px; resize: vertical; }
+  textarea:focus { outline: none; border-color: var(--brand); }
+  .estado { font-size: 13px; color: var(--muted); min-height: 18px; margin-top: 6px; }
+  nav { display: flex; gap: 10px; margin-top: 16px; }
+  button { font: inherit; font-weight: 600; border: 0; border-radius: 12px; padding: 14px 16px; cursor: pointer; }
+  .sec { background: var(--card); color: var(--brand); border: 2px solid var(--brand-soft); flex: 1; }
+  .pri { background: var(--brand); color: #fff; flex: 1; }
+  .entregar { width: 100%; margin-top: 18px; background: var(--ok); color: #fff; }
+  button:disabled { opacity: .45; }
+  .mapa { display: grid; grid-template-columns: repeat(auto-fill, minmax(44px, 1fr)); gap: 8px; margin-top: 18px; }
+  .mapa button { padding: 10px 0; background: var(--card); color: var(--ink); border: 2px solid var(--line); }
+  .mapa button.hecha { background: var(--ok-soft); border-color: #86efac; }
+  .mapa button.actual { border-color: var(--brand); }
+  .aviso { position: fixed; left: 16px; right: 16px; bottom: 16px; z-index: 20; background: #111827; color: #fff;
+    padding: 12px 14px; border-radius: 12px; display: none; }
+  .aviso.ver { display: block; }
+  .offline { background: var(--warn-soft); color: var(--warn); padding: 8px 16px; font-size: 14px; display: none; }
+  .offline.ver { display: block; }
+  .modal { position: fixed; inset: 0; background: rgba(15,23,42,.6); display: none; align-items: center;
+    justify-content: center; padding: 16px; z-index: 30; }
+  .modal.ver { display: flex; }
+  .modal .tarjeta { max-width: 440px; width: 100%; }
+  .centro { text-align: center; padding: 40px 16px; }
+  .grande { font-size: 56px; }
+  .nota { font-size: 40px; font-weight: 800; color: var(--brand); }
+</style>
+</head>
+<body>
+<div id="app"><div class="centro">Cargando examen…</div></div>
+<div class="aviso" id="aviso"></div>
+
+<script>
+(function () {
+  "use strict";
+  var T = new URLSearchParams(location.search).get("t") || "";
+  var app = document.getElementById("app");
+  var EN_FIN = location.pathname.indexOf("/fin") === 0;
+  var datos = null, idx = 0, restante = null, entregando = false;
+  var pendientes = {}, enviando = false, temporizadores = {};
+
+  function esc(s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+  function api(ruta, cuerpo) {
+    var op = cuerpo ? { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(Object.assign({ t: T }, cuerpo)) } : {};
+    return fetch(ruta, op).then(function (r) {
+      return r.json().then(function (j) { return { ok: r.ok, status: r.status, j: j }; });
+    });
+  }
+  function aviso(txt) {
+    var a = document.getElementById("aviso");
+    a.textContent = txt; a.classList.add("ver");
+    clearTimeout(aviso.t); aviso.t = setTimeout(function () { a.classList.remove("ver"); }, 4000);
+  }
+  function irAFin() { location.replace("/fin?t=" + encodeURIComponent(T)); }
+
+  // La app nativa avisa de incidentes con este evento.
+  window.addEventListener("examenseguro:incidente", function (e) { aviso("⚠ Se registró: " + e.detail); });
+
+  // ------------------------------------------------------------ pantalla final
+  if (EN_FIN) {
+    api("/api/resultado?t=" + encodeURIComponent(T)).then(function (r) {
+      var j = r.j || {};
+      var ok = j.estado === "entregado" || j.estado === "tiempo" || j.estado === "cerrado";
+      var html = '<div class="centro"><div class="grande">' + (ok ? "✅" : "⛔") + "</div>" +
+        "<h2>" + esc(j.estado_texto || "Examen finalizado") + "</h2>" +
+        (j.motivo ? '<p style="color:var(--muted)">' + esc(j.motivo) + "</p>" : "") +
+        "<p>" + esc(j.nombre || "") + "<br>Contestaste " + (j.contestadas || 0) + " de " + (j.total || 0) + " preguntas.</p>";
+      if (j.maximo != null) {
+        html += '<div class="nota">' + j.puntaje + " / " + j.maximo + "</div>" +
+          (j.pendientes ? "<p>" + j.pendientes + " respuesta(s) abiertas las revisará el docente.</p>" : "");
+      }
+      html += '<p style="color:var(--muted)">Tus respuestas quedaron guardadas en la computadora del docente. ' +
+        "Ya puedes pulsar «Cerrar».</p></div>";
+      app.innerHTML = html;
+    }).catch(function () {
+      app.innerHTML = '<div class="centro"><div class="grande">✅</div><h2>Examen finalizado</h2></div>';
+    });
+    return;
+  }
+
+  // ------------------------------------------------------------ examen
+  function contestada(p) {
+    var v = datos.respuestas[p.id];
+    return v !== undefined && v !== null && v !== "" && !(Array.isArray(v) && v.length === 0);
+  }
+  function nContestadas() { return datos.preguntas.filter(contestada).length; }
+
+  function fmt(s) {
+    if (s == null) return "Sin límite";
+    var h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), x = s % 60;
+    return (h ? h + ":" + String(m).padStart(2, "0") : m) + ":" + String(x).padStart(2, "0");
+  }
+
+  function pintarCabecera() {
+    var total = datos.preguntas.length, hechas = nContestadas();
+    document.getElementById("barra").style.width = (100 * hechas / total) + "%";
+    document.getElementById("progreso").textContent = hechas + " de " + total + " contestadas";
+    var r = document.getElementById("reloj");
+    r.textContent = fmt(restante);
+    r.classList.toggle("poco", restante != null && restante <= 120);
+  }
+
+  function pintar() {
+    var p = datos.preguntas[idx], v = datos.respuestas[p.id], total = datos.preguntas.length;
+    var cuerpo;
+    if (p.tipo === "abierta") {
+      cuerpo = '<textarea id="txt" placeholder="Escribe tu respuesta…" autocomplete="off" ' +
+        'autocorrect="off" spellcheck="false">' + esc(v || "") + "</textarea>";
+    } else {
+      var multi = p.tipo === "multiple", sel = multi ? (v || []) : [v];
+      cuerpo = (multi ? '<p class="meta" style="margin-top:-6px">Puedes elegir varias opciones</p>' : "") +
+        p.opciones.map(function (o) {
+          var on = sel.indexOf(o.id) >= 0;
+          return '<label class="op' + (on ? " sel" : "") + '"><input type="' + (multi ? "checkbox" : "radio") +
+            '" name="op" value="' + esc(o.id) + '"' + (on ? " checked" : "") + "><span>" + esc(o.texto) + "</span></label>";
+        }).join("");
+    }
+    document.getElementById("pregunta").innerHTML =
+      '<div class="meta"><span>Pregunta ' + (idx + 1) + " de " + total + "</span><span>" + p.puntos +
+      " pt" + (p.puntos == 1 ? "" : "s") + "</span></div>" +
+      '<p class="enunciado">' + esc(p.texto) + "</p>" + cuerpo + '<div class="estado" id="estado"></div>';
+
+    document.getElementById("ant").disabled = idx === 0;
+    document.getElementById("sig").textContent = idx === total - 1 ? "Revisar y entregar" : "Siguiente →";
+    document.getElementById("mapa").innerHTML = datos.preguntas.map(function (q, i) {
+      return '<button data-i="' + i + '" class="' + (contestada(q) ? "hecha " : "") + (i === idx ? "actual" : "") +
+        '">' + (i + 1) + "</button>";
+    }).join("");
+    pintarCabecera();
+
+    var txt = document.getElementById("txt");
+    if (txt) txt.addEventListener("input", function () { guardar(p.id, txt.value, 700); });
+    document.querySelectorAll("input[name=op]").forEach(function (inp) {
+      inp.addEventListener("change", function () {
+        var marcados = [].slice.call(document.querySelectorAll("input[name=op]:checked")).map(function (x) { return x.value; });
+        document.querySelectorAll("label.op").forEach(function (l) { l.classList.toggle("sel", l.querySelector("input").checked); });
+        guardar(p.id, p.tipo === "multiple" ? marcados : (marcados[0] || ""), 0);
+      });
+    });
+  }
+
+  function marcarEstado(t) { var e = document.getElementById("estado"); if (e) e.textContent = t; }
+
+  function guardar(id, valor, espera) {
+    datos.respuestas[id] = valor;
+    pendientes[id] = valor;
+    marcarEstado("Guardando…");
+    pintarCabecera();
+    clearTimeout(temporizadores[id]);
+    temporizadores[id] = setTimeout(enviar, espera);
+  }
+
+  function enviar() {
+    if (enviando) return;
+    var ids = Object.keys(pendientes);
+    if (!ids.length) return Promise.resolve();
+    enviando = true;
+    var id = ids[0], valor = pendientes[id];
+    return api("/api/responder", { pregunta: id, valor: valor }).then(function (r) {
+      enviando = false;
+      if (r.status === 409) return irAFin();
+      if (pendientes[id] === valor) delete pendientes[id];
+      sinConexion(false);
+      if (!Object.keys(pendientes).length) marcarEstado("Guardado ✓");
+      return enviar();
+    }).catch(function () {
+      enviando = false;
+      sinConexion(true);
+      marcarEstado("Sin conexión: se guardará al reconectar");
+      setTimeout(enviar, 3000);
+    });
+  }
+
+  function sinConexion(si) { document.getElementById("offline").classList.toggle("ver", si); }
+
+  function revisar() {
+    var falt = [];
+    datos.preguntas.forEach(function (p, i) { if (!contestada(p)) falt.push(i + 1); });
+    document.getElementById("modalTxt").innerHTML = "Contestaste <b>" + nContestadas() + " de " +
+      datos.preguntas.length + "</b> preguntas." + (falt.length ? "<br>Sin responder: " + falt.join(", ") : "") +
+      "<br><br>Una vez entregado no podrás modificar tus respuestas.";
+    document.getElementById("modal").classList.add("ver");
+  }
+
+  function entregar() {
+    if (entregando) return;
+    entregando = true;
+    document.getElementById("confirmar").disabled = true;
+    document.getElementById("confirmar").textContent = "Entregando…";
+    var esperar = function () {
+      return Object.keys(pendientes).length ? (enviar() || Promise.resolve()).then(function () {
+        return new Promise(function (ok) { setTimeout(ok, 300); }).then(esperar);
+      }) : Promise.resolve();
+    };
+    esperar().then(function () { return api("/api/entregar", {}); }).then(irAFin).catch(function () {
+      entregando = false;
+      document.getElementById("confirmar").disabled = false;
+      document.getElementById("confirmar").textContent = "Entregar";
+      aviso("No hay conexión con el docente. Inténtalo de nuevo.");
+    });
+  }
+
+  function latido() {
+    api("/api/latido", {}).then(function (r) {
+      sinConexion(false);
+      if (!r.ok || r.j.estado !== "activo") return irAFin();
+      restante = r.j.restante;
+      if (Object.keys(pendientes).length) enviar();
+    }).catch(function () { sinConexion(true); });
+  }
+
+  api("/api/examen?t=" + encodeURIComponent(T)).then(function (r) {
+    if (!r.ok) { app.innerHTML = '<div class="centro"><h2>Sesión no válida</h2><p>Vuelve a escanear el QR.</p></div>'; return; }
+    datos = r.j;
+    if (datos.estado !== "activo") return irAFin();
+    restante = datos.restante;
+    document.title = datos.titulo;
+    app.innerHTML =
+      '<header><div class="fila"><div class="titulo"><b>' + esc(datos.titulo) + "</b><small>" + esc(datos.nombre) +
+      ' · <span id="progreso"></span></small></div><div class="reloj" id="reloj"></div></div>' +
+      '<div class="barra"><i id="barra"></i></div></header>' +
+      '<div class="offline" id="offline">⚠ Sin conexión con la computadora del docente. Sigue contestando; se guardará al reconectar.</div>' +
+      '<main><div class="tarjeta" id="pregunta"></div>' +
+      '<nav><button class="sec" id="ant">← Anterior</button><button class="pri" id="sig"></button></nav>' +
+      '<div class="mapa" id="mapa"></div>' +
+      '<button class="entregar" id="btnEntregar">Entregar examen</button></main>' +
+      '<div class="modal" id="modal"><div class="tarjeta"><h3 style="margin-top:0">¿Entregar examen?</h3>' +
+      '<p id="modalTxt"></p><nav><button class="sec" id="cancelar">Seguir</button>' +
+      '<button class="pri" id="confirmar" style="background:var(--ok)">Entregar</button></nav></div></div>';
+
+    document.getElementById("ant").onclick = function () { if (idx > 0) { idx--; pintar(); scrollTo(0, 0); } };
+    document.getElementById("sig").onclick = function () {
+      if (idx < datos.preguntas.length - 1) { idx++; pintar(); scrollTo(0, 0); } else revisar();
+    };
+    document.getElementById("mapa").onclick = function (e) {
+      var b = e.target.closest("button"); if (b) { idx = +b.dataset.i; pintar(); scrollTo(0, 0); }
+    };
+    document.getElementById("btnEntregar").onclick = revisar;
+    document.getElementById("cancelar").onclick = function () { document.getElementById("modal").classList.remove("ver"); };
+    document.getElementById("confirmar").onclick = entregar;
+    pintar();
+
+    setInterval(function () {
+      if (restante == null) return;
+      restante = Math.max(0, restante - 1);
+      pintarCabecera();
+      if (restante === 0 && !entregando) { aviso("Se acabó el tiempo. Entregando…"); entregar(); }
+    }, 1000);
+    setInterval(latido, 5000);
+  }).catch(function () {
+    app.innerHTML = '<div class="centro"><h2>No se pudo conectar</h2><p>Revisa que estés en la misma red Wi-Fi que el docente.</p></div>';
+  });
+})();
+</script>
+</body>
+</html>

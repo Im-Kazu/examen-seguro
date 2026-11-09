@@ -1,0 +1,37 @@
+# ====== Firma y secretos (NUNCA subir) ======
+*.jks
+*.keystore
+keystore.properties
+
+# ====== Android ======
+estudiante/.gradle/
+estudiante/build/
+estudiante/app/build/
+estudiante/local.properties
+estudiante/.idea/
+estudiante/captures/
+*.iml
+
+# ====== Python / panel del docente ======
+docente/__pycache__/
+docente/**/__pycache__/
+*.pyc
+docente/dist/
+docente/build/
+docente/build-pyi/
+*.spec
+
+# ====== Resultados generados en pruebas ======
+docente/Resultados/
+
+# ====== Sistema ======
+Thumbs.db
+.DS_Store
+
+# ====== Excepciones: las descargas SÍ se suben ======
+!descargas/
+!descargas/ExamenSeguroPanel.exe
+!descargas/ExamenSeguro.apk
+
+# CI opcional (requiere scope workflow para subirlo)
+.github/
