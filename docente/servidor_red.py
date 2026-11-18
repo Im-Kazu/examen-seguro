@@ -136,12 +136,22 @@ class Manejador(BaseHTTPRequestHandler):
         self._json(404, {"error": "No encontrado"})
 
 
+class Servidor(ThreadingHTTPServer):
+    """Un hilo por petición. Preparado para que decenas de teléfonos se conecten a la vez."""
+    daemon_threads = True
+    # No usamos allow_reuse_address: en Windows permitiría que dos instancias se
+    # pegaran al mismo puerto sin avisar. Así, si el puerto está ocupado, iniciar()
+    # detecta el error y prueba el siguiente.
+    # Cola de conexiones pendientes de aceptar: con 5 (valor por defecto) se perderían
+    # conexiones cuando 80 teléfonos escanean el QR en el mismo instante. 256 las absorbe.
+    request_queue_size = 256
+
+
 def iniciar(puerto_inicial: int = 8765) -> tuple[ThreadingHTTPServer, int]:
     """Arranca el servidor en el primer puerto libre a partir de puerto_inicial."""
     for puerto in range(puerto_inicial, puerto_inicial + 20):
         try:
-            srv = ThreadingHTTPServer(("0.0.0.0", puerto), Manejador)
-            srv.daemon_threads = True
+            srv = Servidor(("0.0.0.0", puerto), Manejador)
             threading.Thread(target=srv.serve_forever, daemon=True).start()
             return srv, puerto
         except OSError:

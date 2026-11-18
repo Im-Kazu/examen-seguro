@@ -584,19 +584,29 @@ class Guardado:
     def _bucle(self):
         while True:
             self.sucio.wait()
-            time.sleep(2)  # agrupa cambios
+            # Agrupa cambios. Con muchos estudiantes espera un poco más entre
+            # guardados, para no robar CPU a las conexiones (2 s con pocos,
+            # hasta 8 s con un grupo grande).
+            n = len(self.x.estudiantes)
+            time.sleep(min(8.0, 2.0 + n / 40.0))
             self.sucio.clear()
             self.guardar_ahora()
 
     def guardar_ahora(self):
+        from dataclasses import replace
         with self.x.lock:
-            ests = sorted(self.x.estudiantes.values(), key=lambda e: normalizar(e.nombre))
-            for e in ests:
+            for e in self.x.estudiantes.values():
                 if e.activo:
                     self.x._calificar(e)  # puntaje parcial para el reporte
+            # Copia consistente de los datos. Construir el Excel es lo más lento,
+            # así que lo hacemos FUERA del lock: aunque haya 80 teléfonos conectados,
+            # el guardado no los bloquea.
+            ests = sorted((replace(e, respuestas=dict(e.respuestas))
+                           for e in self.x.estudiantes.values()),
+                          key=lambda e: normalizar(e.nombre))
             eventos = list(self.x.eventos)
-            txt = self._txt(ests)
-            libro = self._xlsx(ests, eventos)
+        txt = self._txt(ests, eventos)
+        libro = self._xlsx(ests, eventos)
         with open(self.ruta_txt, "w", encoding="utf-8") as f:
             f.write(txt)
         try:
@@ -608,7 +618,7 @@ class Guardado:
             self.sucio.set()
 
     # ---- TXT
-    def bloque_txt(self, e: Estudiante) -> str:
+    def bloque_txt(self, e: Estudiante, eventos) -> str:
         x = self.x
         dur = int(((e.fin or time.time()) - e.inicio) // 60)
         l = [f"{'=' * 70}", f"ESTUDIANTE: {e.nombre}",
@@ -626,13 +636,13 @@ class Guardado:
             l.append(f"{n}. [{marca}] {p.texto}")
             l.append(f"   Respuesta: {p.texto_respuesta(v) or '(sin responder)'}")
             l.append(f"   Correcta:  {p.texto_correcta()}   Puntos: {'' if pts is None else f'{pts:g}'}/{p.puntos:g}")
-        incid = [ev for ev in x.eventos if ev[1] == e.nombre and ev[2] in ("incidente", "advertencia")]
+        incid = [ev for ev in eventos if ev[1] == e.nombre and ev[2] in ("incidente", "advertencia")]
         if incid:
             l.append("-" * 70 + "\nTELEMETRÍA:")
             l += [f"   {h}  {t.upper():<11} {d}" for h, _, t, d in incid]
         return "\n".join(l) + "\n"
 
-    def _txt(self, ests) -> str:
+    def _txt(self, ests, eventos) -> str:
         x = self.x
         cab = [f"EXAMEN: {x.titulo}", f"Código: {x.codigo}   Creado: {fecha_hora(x.creado)}",
                f"Preguntas por estudiante: {x.cantidad}   Duración: "
@@ -641,7 +651,7 @@ class Guardado:
         for e in ests:
             cab.append(f"{e.nombre[:35]:<35} {ESTADOS[e.estado][:22]:<22} "
                        f"{f'{e.puntaje:g}/{e.maximo:g}':>10} {self._nota(e):>5} {e.incidentes:>6}")
-        return "\n".join(cab) + "\n\n" + "\n".join(self.bloque_txt(e) for e in ests)
+        return "\n".join(cab) + "\n\n" + "\n".join(self.bloque_txt(e, eventos) for e in ests)
 
     @staticmethod
     def _nota(e: Estudiante) -> str:

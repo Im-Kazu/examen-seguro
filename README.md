@@ -41,6 +41,20 @@ dispositivos, usa el **hotspot** de tu laptop o teléfono.
 
 📖 Guías completas: **[Guía del docente](docs/GUIA_DOCENTE.md)** · **[Guía del estudiante](docs/GUIA_ESTUDIANTE.md)**
 
+### 👥 Capacidad
+
+Pensado para un **grupo completo**: aguanta sin problemas **80 teléfonos o más** conectados a la vez
+(cada uno abre una conexión ligera y manda una señal cada 5 s; la laptop apenas lo nota). Probado con
+**85 dispositivos** simultáneos. El límite real no es el programa, sino tu **Wi-Fi/hotspot**: un router
+doméstico suele manejar 30–60 equipos, y el hotspot de un teléfono Android ronda los 10. Para 80+ usa un
+router decente o el hotspot de la laptop.
+
+### 🎵 Música estilo Kahoot
+
+El examen trae una **música de fondo alegre** (estilo Kahoot) que suena en el teléfono del estudiante.
+Cada quien puede **silenciarla** con el botón 🔊 de la esquina superior, y la app recuerda su elección.
+Se genera dentro de la propia app, así que **funciona sin internet** en la red del aula.
+
 ---
 
 ## 📝 Bancos de preguntas

@@ -21,6 +21,8 @@
   .reloj { font-variant-numeric: tabular-nums; font-weight: 700; font-size: 18px; background: rgba(255,255,255,.15);
     padding: 4px 10px; border-radius: 8px; }
   .reloj.poco { background: #dc2626; }
+  .btnmus { background: rgba(255,255,255,.15); color: #fff; border: 0; border-radius: 8px;
+    padding: 4px 9px; font-size: 18px; line-height: 1; cursor: pointer; }
   .barra { height: 4px; background: rgba(255,255,255,.25); margin: 10px -16px 0; }
   .barra i { display: block; height: 100%; width: 0; background: #fbbf24; transition: width .3s; }
   main { max-width: 720px; margin: 0 auto; padding: 16px; }
@@ -62,6 +64,91 @@
 <body>
 <div id="app"><div class="centro">Cargando examen…</div></div>
 <div class="aviso" id="aviso"></div>
+
+<script>
+// ================= Música de fondo estilo Kahoot (Web Audio, sin archivos) =========
+// Bucle animado y alegre generado al vuelo: funciona sin internet, en la red local.
+window.Musica = (function () {
+  "use strict";
+  var A = null, master = null, timer = null, playing = false, paso = 0, prox = 0;
+  var muted = false;
+  try { muted = localStorage.getItem("es_musica") === "off"; } catch (e) {}
+
+  var BPM = 128, SPB = 60 / BPM, LOOK = 0.12, TICK = 25 / 1000;
+  // Progresión alegre IV–V–vi–I (Fa, Sol, Lam, Do). 4 pasos (corcheas) por acorde.
+  var PROG = [
+    { bajo: 41, arp: [53, 57, 60, 65] },  // Fa mayor
+    { bajo: 43, arp: [55, 59, 62, 67] },  // Sol mayor
+    { bajo: 45, arp: [57, 60, 64, 69] },  // La menor
+    { bajo: 48, arp: [60, 64, 67, 72] }   // Do mayor
+  ];
+  function mtof(m) { return 440 * Math.pow(2, (m - 69) / 12); }
+
+  function voz(tipo, freq, t, dur, vol) {
+    var o = A.createOscillator(), g = A.createGain();
+    o.type = tipo; o.frequency.value = freq;
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(vol, t + 0.008);        // ataque corto (plucky)
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(master);
+    o.start(t); o.stop(t + dur + 0.02);
+  }
+  function kick(t) {
+    var o = A.createOscillator(), g = A.createGain();
+    o.type = "sine";
+    o.frequency.setValueAtTime(150, t);
+    o.frequency.exponentialRampToValueAtTime(50, t + 0.12);
+    g.gain.setValueAtTime(0.5, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.14);
+    o.connect(g); g.connect(master);
+    o.start(t); o.stop(t + 0.16);
+  }
+  function programar(paso, t) {
+    var acorde = PROG[Math.floor(paso / 4) % 4], n = paso % 4;
+    var corchea = SPB / 2;
+    voz("triangle", mtof(acorde.arp[n]), t, corchea * 0.9, 0.16);      // arpegio
+    if (n === 0 || n === 2) {                                          // bajo que rebota
+      voz("square", mtof(acorde.bajo + (n === 2 ? 12 : 0)), t, SPB * 0.8, 0.14);
+      kick(t);                                                         // pulso
+    }
+  }
+  function bucle() {
+    while (prox < A.currentTime + LOOK) {
+      programar(paso % 16, prox);
+      prox += SPB / 2;
+      paso++;
+    }
+    timer = setTimeout(bucle, TICK * 1000);
+  }
+  function arrancar() {
+    if (playing || muted) return;
+    try {
+      if (!A) {
+        A = new (window.AudioContext || window.webkitAudioContext)();
+        master = A.createGain(); master.gain.value = 0.18; master.connect(A.destination);
+      }
+      if (A.state === "suspended") A.resume();
+      playing = true; prox = A.currentTime + 0.1; bucle();
+    } catch (e) { playing = false; }
+  }
+  function parar() {
+    playing = false;
+    clearTimeout(timer);
+    try { if (A) A.suspend(); } catch (e) {}
+  }
+  return {
+    activa: function () { return !muted; },
+    // Primer toque de pantalla: arranca si no está silenciada (política de autoplay).
+    primerGesto: function () { if (!muted) arrancar(); },
+    alternar: function () {
+      muted = !muted;
+      try { localStorage.setItem("es_musica", muted ? "off" : "on"); } catch (e) {}
+      if (muted) parar(); else arrancar();
+      return !muted;
+    }
+  };
+})();
+</script>
 
 <script>
 (function () {
@@ -255,7 +342,9 @@
     document.title = datos.titulo;
     app.innerHTML =
       '<header><div class="fila"><div class="titulo"><b>' + esc(datos.titulo) + "</b><small>" + esc(datos.nombre) +
-      ' · <span id="progreso"></span></small></div><div class="reloj" id="reloj"></div></div>' +
+      ' · <span id="progreso"></span></small></div>' +
+      '<button id="musica" class="btnmus" title="Música" aria-label="Música"></button>' +
+      '<div class="reloj" id="reloj"></div></div>' +
       '<div class="barra"><i id="barra"></i></div></header>' +
       '<div class="offline" id="offline">⚠ Sin conexión con la computadora del docente. Sigue contestando; se guardará al reconectar.</div>' +
       '<main><div class="tarjeta" id="pregunta"></div>' +
@@ -276,6 +365,18 @@
     document.getElementById("btnEntregar").onclick = revisar;
     document.getElementById("cancelar").onclick = function () { document.getElementById("modal").classList.remove("ver"); };
     document.getElementById("confirmar").onclick = entregar;
+
+    // Música estilo Kahoot: botón de silencio y arranque al primer toque.
+    var bm = document.getElementById("musica");
+    function iconoMusica() { bm.textContent = window.Musica.activa() ? "🔊" : "🔇"; }
+    iconoMusica();
+    bm.onclick = function () { window.Musica.alternar(); iconoMusica(); };
+    var gesto = function () {
+      window.Musica.primerGesto();
+      document.removeEventListener("pointerdown", gesto);
+    };
+    document.addEventListener("pointerdown", gesto);
+
     pintar();
 
     setInterval(function () {
